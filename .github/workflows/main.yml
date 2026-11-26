@@ -29,37 +29,59 @@ jobs:
       - name: Unzip kajo.zip
         run: |
           if [ ! -f kajo.zip ]; then
-            echo "kajo.zip not found in repo root. Files in repo:"
+            echo "ERROR: kajo.zip not found in repository root."
+            echo "Repository files:"
             ls -la
             exit 1
           fi
+
+          rm -rf project_src
           mkdir -p project_src
+
           unzip -o -q kajo.zip -d project_src
 
-      - name: Find project folder
+          echo "Extracted project:"
+          find project_src -maxdepth 3 -type f | sort | head -100
+
+      - name: Find Android project
         id: proj
+        shell: bash
         run: |
-          F=$(find project_src -name settings.gradle.kts | head -n 1)
+          set -e
+
+          # Support both Gradle settings formats
+          F=$(find project_src -type f \( \
+            -name "settings.gradle" -o \
+            -name "settings.gradle.kts" \
+          \) | head -n 1)
+
           if [ -z "$F" ]; then
-            echo "settings.gradle.kts not found inside kajo.zip. Files:"
-            find project_src -maxdepth 3 | head -60
+            echo "ERROR: No settings.gradle or settings.gradle.kts found."
+            echo "Files inside project_src:"
+            find project_src -maxdepth 4 -type f | sort
             exit 1
           fi
-          echo "Project found in: $(dirname "$F")"
-          echo "dir=$(dirname "$F")" >> "$GITHUB_OUTPUT"
+
+          PROJECT_DIR="$(dirname "$F")"
+
+          echo "Android project found at:"
+          echo "$PROJECT_DIR"
+
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
 
-      - name: Build debug APK
+      - name: Build Debug APK
         working-directory: ${{ steps.proj.outputs.dir }}
-        run: gradle assembleDebug --console=plain
+        run: |
+          gradle assembleDebug --console=plain
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: TouchAssist-debug
+          name: HodaScripts-debug
           path: ${{ steps.proj.outputs.dir }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
